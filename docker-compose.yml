@@ -26,12 +26,12 @@ services:
         links:
             - "ipfs:ipfs"
             - "postgres:postgres_addr"
-            - "ganache:ganache_url" # Infura 대신 로컬에서 Ganache로 우선 개발
+            - "ganache:ganache_url"
         ports:
             - "8000:8000"
         depends_on:
-            - postgres
-            - ganache
+            postgres:
+                condition: service_healthy
         volumes:
             - ./data/ganache_build:/app/ganache_build
         env_file:
@@ -59,7 +59,8 @@ services:
             - ./data/ganache:/data
             - ./data/ganache_build:/ganache/build
         depends_on:
-            - postgres
+            postgres:
+                condition: service_healthy
         networks:
             - default
 
@@ -74,6 +75,16 @@ services:
             - ./data/postgres:/var/lib/postgresql/data
         env_file:
             - .env
+        healthcheck: # PostgreSQL 헬스체크 추가
+            test:
+                [
+                    "CMD-SHELL",
+                    "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-sillok-test}",
+                ]
+            interval: 5s
+            timeout: 5s
+            retries: 5
+            start_period: 10s
 networks:
     default:
         driver: bridge
