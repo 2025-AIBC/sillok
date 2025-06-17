@@ -92,6 +92,11 @@ async def create_file(file: schemas.FileUpdate, db: Session = Depends(get_db)):
 async def delete_file(del_request: schemas.fileDelete, db: Session = Depends(get_db)):
     fname = utils.delete_file_by_cid(del_request.cid, db)
     return JSONResponse(content={"message": f"CID {del_request.cid}에 해당하는{fname} 파일이 삭제되었습니다.", "CID":del_request.cid, "fname":fname})
+
+@app.post("/api/restore/")
+async def restore_file(req: schemas.fileDelete, db: Session = Depends(get_db)):
+    db_file = utils.restore_file_by_cid(req.cid, db)
+    return JSONResponse(content={"CID": db_file.CID, "fname": db_file.fname, "message": "파일 복구 성공."})
 # db_file = models.File(
 #         CID=cid,
 #         fname=request_data.fname, 

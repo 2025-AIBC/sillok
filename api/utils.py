@@ -251,6 +251,37 @@ def delete_file_by_cid(cid:str, db: Session):
     db.refresh(db_file)
     return fname
 
+def restore_file_by_cid(cid: str, db: Session):
+    """Restore file metadata and vectors from IPFS."""
+    global retriever
+    response = requests.post(f"http://{IPFS_HOST}:{IPFS_PORT}/api/v0/cat?arg={cid}")
+    content = response.json()
+
+    metadata = content["metadata"]
+    raw_content = content["raw_content"]
+    splits = [Document(page_content=s["page_content"], metadata=s["metadata"]) for s in content["splits"]]
+    split_ids = content["split_ids"]
+
+    vector_store.add_documents(splits, ids=split_ids)
+    retriever = vector_store.as_retriever()
+
+    last_update = datetime.strptime(metadata["last_update"], "%Y-%m-%d_%H:%M:%S")
+
+    db_file = models.File(
+        CID=cid,
+        fname=metadata["fname"],
+        type=metadata.get("raw_content_type", "markdown"),
+        last_update=last_update,
+        is_deleted=metadata.get("is_deleted", False),
+        user_id=metadata["user_id"],
+        TXHash="",
+        content=raw_content,
+    )
+    db.add(db_file)
+    db.commit()
+    db.refresh(db_file)
+    return db_file
+
 def update_file(request_data: schemas.FileUpdate, db: Session):
     file_create_data = request_data.dict(exclude={"CID"})
     delete_file_by_cid(request_data.CID, db)
