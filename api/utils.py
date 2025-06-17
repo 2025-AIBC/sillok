@@ -176,7 +176,14 @@ def create_file(request_data: schemas.FileCreate, db: Session):
     file_like_object = BytesIO(json_content.encode('utf-8'))
     file_like_object.name = request_data.fname.split('.')[0] + ".json"
     files = {'file': (file_like_object.name, file_like_object)}
-    response = requests.post(f'http://{IPFS_HOST}:{IPFS_PORT}/api/v0/add', files=files)
+    response = requests.post(
+        f'http://{IPFS_HOST}:{IPFS_PORT}/api/v0/add', files=files
+    )
+    if not response.ok:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f'IPFS add failed: {response.text}',
+        )
     result = response.json()
     # print(result) #{'Name': 'example.json', 'Hash': 'QmcjjzgPnUcSkESKCQcfHTcP1C5YBXQUPL462cTkdv4t8A', 'Size': '69284'}
     # 6. 블록체인에 저장
@@ -239,7 +246,14 @@ def delete_file_by_cid(cid:str, db: Session):
     db_file = db.query(models.File).filter(models.File.CID == cid).first()
     if db_file is None:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
-    response = requests.post(f"http://{IPFS_HOST}:{IPFS_PORT}/api/v0/cat?arg={cid}")
+    response = requests.get(
+        f"http://{IPFS_HOST}:{IPFS_PORT}/api/v0/cat?arg={cid}"
+    )
+    if not response.ok:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f"IPFS fetch failed: {response.text}",
+        )
     content = response.json()
     splits_ids = content["split_ids"]
     vector_store.delete(ids=splits_ids)
