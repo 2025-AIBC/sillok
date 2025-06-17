@@ -66,7 +66,13 @@ def read_cid(cid):
     # FastAPI 거치면 느려지니까.. 발표자료에는 FastAPI 건너는거로 그리긴했는데 실제로는 이렇게 direct하게 구현했음.
     IPFS_HOST = "ipfs" # Check `docker-compose.yml`
     IPFS_PORT = 5001
-    response = requests.post(f"http://{IPFS_HOST}:{IPFS_PORT}/api/v0/cat?arg={cid}")
+    response = requests.get(
+        f"http://{IPFS_HOST}:{IPFS_PORT}/api/v0/cat?arg={cid}"
+    )
+    if not response.ok:
+        raise requests.HTTPError(
+            f"Failed to fetch {cid}: {response.status_code} {response.text}"
+        )
     content = response.json()
     print(content)
     # content에 저장된 내용
