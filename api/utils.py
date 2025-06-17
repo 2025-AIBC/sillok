@@ -209,7 +209,7 @@ def create_file(request_data: schemas.FileCreate, db: Session):
         last_update=metadata["last_update"],
         is_deleted=metadata["is_deleted"],
         user_id=request_data.user_id,
-        TXHash=tx_hash,
+        TXHash=tx_hash.hex(),
         content=request_data.content # 빠른 사용을 위해 CID와 병행
     )
     db.add(db_file)
@@ -226,12 +226,13 @@ def get_files_by_user_id(user_id:str, db: Session):
             results.append(record.dict())
     return results
 
-def get_txhash_and_cid_by_user_id(user_id:str, db: Session):
+def get_txhash_and_cid_by_user_id(user_id: str, db: Session):
     records = db.query(models.File).filter(models.File.user_id.in_([user_id])).all()
     results = []
     for record in records:
         if not record.is_deleted:
-            results.append({"CID":record.CID, "fname":record.fname, "TXHash":record.TXHash})
+            tx_hash = record.TXHash.hex() if hasattr(record.TXHash, "hex") else record.TXHash
+            results.append({"CID": record.CID, "fname": record.fname, "TXHash": tx_hash})
     return results
 
 def delete_file_by_cid(cid:str, db: Session):
