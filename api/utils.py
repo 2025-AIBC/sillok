@@ -234,6 +234,70 @@ def get_txhash_and_cid_by_user_id(user_id:str, db: Session):
             results.append({"CID":record.CID, "fname":record.fname, "TXHash":record.TXHash})
     return results
 
+def restore_user_files(user_id: str, db: Session):
+    """Restore all files for ``user_id`` from blockchain and IPFS."""
+    try:
+        file_events = (
+            contract.events.FileMetadataStored.create_filter(
+                fromBlock=0, argument_filters={"userId": user_id}
+            ).get_all_entries()
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Blockchain query failed: {exc}")
+
+    global retriever
+    restored = []
+    for ev in file_events:
+        cid = ev.args["CID"]
+        tx_hash = ev.transactionHash.hex()
+
+        response = requests.post(f"http://{IPFS_HOST}:{IPFS_PORT}/api/v0/cat?arg={cid}")
+        if not response.ok:
+            raise HTTPException(status_code=500, detail=f"IPFS retrieval failed for {cid}")
+        content = response.json()
+
+        metadata = content.get("metadata", {})
+        raw_content = content.get("raw_content", "")
+        splits_data = content.get("splits", [])
+        split_ids = content.get("split_ids", [])
+        vectors = content.get("vectors", [])
+
+        splits = [Document(page_content=s["page_content"], metadata=s.get("metadata", {})) for s in splits_data]
+        if splits:
+            vector_store.add_documents(splits, ids=split_ids)
+            retriever = vector_store.as_retriever()
+
+            db_vectors = (
+                db.query(models.LangchainPGEmbedding)
+                .filter(models.LangchainPGEmbedding.id.in_(split_ids))
+                .all()
+            )
+            db_vectors = [list(rec.embedding) for rec in db_vectors]
+            if len(db_vectors) != len(vectors):
+                raise HTTPException(status_code=500, detail="Vector restore validation failed")
+            for a, b in zip(db_vectors, vectors):
+                if not np.allclose(np.array(a, dtype=np.float32), np.array(b, dtype=np.float32)):
+                    raise HTTPException(status_code=500, detail="Vector restore validation failed")
+
+        if not db.query(models.File).filter(models.File.CID == cid).first():
+            db_file = models.File(
+                CID=cid,
+                fname=metadata.get("fname", ""),
+                type=metadata.get("raw_content_type", ""),
+                last_update=metadata.get("last_update"),
+                is_deleted=metadata.get("is_deleted", False),
+                user_id=user_id,
+                TXHash=tx_hash,
+                content=raw_content,
+            )
+            db.add(db_file)
+            db.commit()
+            db.refresh(db_file)
+
+        restored.append({"CID": cid, "TXHash": tx_hash, "fname": metadata.get("fname", "")})
+
+    return restored
+
 def delete_file_by_cid(cid:str, db: Session):
     global retriever
     db_file = db.query(models.File).filter(models.File.CID == cid).first()
