@@ -151,8 +151,12 @@ def create_file(request_data: schemas.FileCreate, db: Session):
     vector_store.add_documents(splits, ids=splits_ids)
     retriever = vector_store.as_retriever() # retriever 업데이트
     # 4. Embedding된 벡터들을 가져오기
-    embedding_records = db.query(models.LangchainPGEmbedding).filter(models.LangchainPGEmbedding.id.in_(splits_ids)).first()
-    vectors = [vector for vector in embedding_records.embedding]
+    embedding_records = (
+        db.query(models.LangchainPGEmbedding)
+        .filter(models.LangchainPGEmbedding.id.in_(splits_ids))
+        .all()
+    )
+    vectors = [list(record.embedding) for record in embedding_records]
     
     # 5. IPFS에 저장 (with metadata)
     print("데이터를 IPFS에 저장하는 중입니다...")
@@ -170,7 +174,10 @@ def create_file(request_data: schemas.FileCreate, db: Session):
         "raw_content": request_data.content,
         "splits": [{"page_content": split.page_content, "metadata": split.metadata} for split in splits],
         "split_ids": splits_ids,
-        "vectors": [float(vector) if isinstance(vector, np.float32) else vector for vector in vectors],
+        "vectors": [
+            [float(v) if isinstance(v, np.float32) else v for v in vector]
+            for vector in vectors
+        ],
     }
     json_content = json.dumps(data_for_IPFS)
     file_like_object = BytesIO(json_content.encode('utf-8'))
@@ -346,3 +353,35 @@ def check_decodable(text:str):
     if unicodedata.normalize('NFC', text) == unicodedata.normalize('NFC', enc_text.decode("utf-8")):
         return True
     return False
+
+def restore_user_files(user_id: str, db: Session):
+    """Restore user's files from IPFS into the vector store."""
+    global retriever
+    records = (
+        db.query(models.File)
+        .filter(models.File.user_id == user_id, models.File.is_deleted == False)
+        .all()
+    )
+
+    for record in records:
+        response = requests.post(
+            f"http://{IPFS_HOST}:{IPFS_PORT}/api/v0/cat?arg={record.CID}"
+        )
+        content = response.json()
+        splits = [
+            Document(page_content=s["page_content"], metadata=s["metadata"])
+            for s in content.get("splits", [])
+        ]
+        split_ids = content.get("split_ids", [])
+        vectors = content.get("vectors", [])
+        if vectors:
+            vector_store.add_embeddings(
+                texts=[doc.page_content for doc in splits],
+                embeddings=vectors,
+                metadatas=[doc.metadata for doc in splits],
+                ids=split_ids,
+            )
+        else:
+            vector_store.add_documents(splits, ids=split_ids)
+
+    retriever = vector_store.as_retriever()
