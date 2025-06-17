@@ -239,7 +239,7 @@ def restore_user_files(user_id: str, db: Session):
     try:
         file_events = (
             contract.events.FileMetadataStored.create_filter(
-                fromBlock=0, argument_filters={"userId": user_id}
+                from_block=0, argument_filters={"userId": user_id}
             ).get_all_entries()
         )
     except Exception as exc:

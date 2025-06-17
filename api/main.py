@@ -81,7 +81,7 @@ async def authenticate_user(auth_request: schemas.AuthRequest, db: Session = Dep
 @app.post("/api/create/")
 async def create_file(file: schemas.FileCreate, db: Session = Depends(get_db)):
     db_file = utils.create_file(file, db)
-    return JSONResponse(content={"CID": db_file.CID,"TXHash": db_file.TXHash,"fname": db_file.fname,"last_update": db_file.last_update.strftime('%Y-%m-%d %H:%M:%S'),"message": "파일 생성 성공."})
+    return JSONResponse(content={"UserID": db_file.user_id, "CID": db_file.CID,"TXHash": db_file.TXHash,"fname": db_file.fname,"last_update": db_file.last_update.strftime('%Y-%m-%d %H:%M:%S'),"message": "파일 생성 성공."})
 
 @app.post("/api/update/")
 async def create_file(file: schemas.FileUpdate, db: Session = Depends(get_db)):
