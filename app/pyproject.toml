@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "Sillok_APP"
+version = "0.1.0"
+description = "Web application for Sillok"
+authors = ["JinwangMok <jinwangmok@gmail.com>"]
+package-mode = false
+license = "MIT License"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+gradio = "^4.42.0"
+beautifulsoup4 = "^4.12.3"
+pytz = "^2024.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,79 @@
+services:
+    nginx:
+        build:
+            context: ./nginx
+        ports:
+            - "80:80"
+        depends_on:
+            - gradio_app
+            - fastapi_app
+
+    gradio_app:
+        build:
+            context: ./app
+        links:
+            - "fastapi_app:fastapi_url"
+        ports:
+            - "7860:7860"
+        depends_on:
+            - fastapi_app
+        env_file:
+            - .env
+
+    fastapi_app:
+        build:
+            context: ./api
+        links:
+            - "ipfs:ipfs"
+            - "postgres:postgres_addr"
+            - "ganache:ganache_url" # Infura 대신 로컬에서 Ganache로 우선 개발
+        ports:
+            - "8000:8000"
+        depends_on:
+            - postgres
+            - ganache
+        volumes:
+            - ./data/ganache_build:/app/ganache_build
+        env_file:
+            - .env
+
+    ipfs:
+        image: ipfs/kubo
+        container_name: ipfs
+        ports:
+            - "4001:4001" # P2P TCP/QUIC transports
+            - "5001:5001" # API port
+            - "8080:8080" # Gateway port
+        volumes:
+            - ./data/ipfs:/data/ipfs
+            - ./data/ipfs-export:/export
+
+    ganache:
+        build:
+            context: ./ganache
+        container_name: ganache
+        ports:
+            - "8545:8545"
+        privileged: true
+        volumes:
+            - ./data/ganache:/data
+            - ./data/ganache_build:/ganache/build
+        depends_on:
+            - postgres
+        networks:
+            - default
+
+    postgres:
+        build:
+            context: ./database
+        container_name: postgres_db
+        ports:
+            - 5432:5432
+        volumes:
+            - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+            - ./data/postgres:/var/lib/postgresql/data
+        env_file:
+            - .env
+networks:
+    default:
+        driver: bridge

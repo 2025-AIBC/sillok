@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "Sillok"
+version = "0.1.0"
+description = "Sillok is a confidence note-taking tool that leveraging LLM, Blockchian, and IPFS for secure and private note-taking."
+authors = ["JinwangMok <jinwangmok@gmail.com>"]
+license = "MIT License"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+openai = "^1.25.2"
+langchain = "^0.1.17"
+langchain-openai = "^0.1.6"
+langchain-community = "^0.0.36"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

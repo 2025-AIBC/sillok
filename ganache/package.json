@@ -1,0 +1,17 @@
+{
+    "name": "sillok-ganache-truffle-project",
+    "version": "1.0.0",
+    "description": "Ganache + Truffle project for Ethereum smart contract deployment of Sillok.",
+    "main": "index.js",
+    "scripts": {
+        "test": "truffle test",
+        "migrate": "truffle migrate --network development",
+        "compile": "truffle compile"
+    },
+    "author": "Jinwang Mok",
+    "license": "MIT",
+    "dependencies": {
+        "truffle": "^5.4.0",
+        "web3": "^1.5.0"
+    }
+}
