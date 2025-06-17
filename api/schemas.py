@@ -90,3 +90,6 @@ class chatRequest(BaseModel):
 
 class fileDelete(BaseModel):
     cid: str
+
+class RestoreRequest(BaseModel):
+    user_id: str

@@ -106,6 +106,10 @@ async def delete_file(del_request: schemas.fileDelete, db: Session = Depends(get
 async def read_file(read_request:schemas.ReadRequest, db: Session = Depends(get_db)):
     return utils.get_txhash_and_cid_by_user_id(read_request.user_id, db)
 
+@app.post("/api/restore/", response_model=list)
+async def restore_files(req: schemas.RestoreRequest, db: Session = Depends(get_db)):
+    return utils.restore_user_files(req.user_id, db)
+
 @app.post("/api/chat/")
 async def chat_generation_invoke(query_request:schemas.chatRequest):
     return JSONResponse(content={"assistant":utils.rag_chain.invoke(query_request.question)})
