@@ -81,7 +81,7 @@ async def authenticate_user(auth_request: schemas.AuthRequest, db: Session = Dep
 @app.post("/api/create/")
 async def create_file(file: schemas.FileCreate, db: Session = Depends(get_db)):
     db_file = utils.create_file(file, db)
-    return JSONResponse(content={"CID": db_file.CID,"TXHash": db_file.TXHash,"fname": db_file.fname,"last_update": db_file.last_update.strftime('%Y-%m-%d %H:%M:%S'),"message": "파일 생성 성공."})
+    return JSONResponse(content={"UserID": db_file.user_id, "CID": db_file.CID,"TXHash": db_file.TXHash,"fname": db_file.fname,"last_update": db_file.last_update.strftime('%Y-%m-%d %H:%M:%S'),"message": "파일 생성 성공."})
 
 @app.post("/api/update/")
 async def create_file(file: schemas.FileUpdate, db: Session = Depends(get_db)):
@@ -92,6 +92,11 @@ async def create_file(file: schemas.FileUpdate, db: Session = Depends(get_db)):
 async def delete_file(del_request: schemas.fileDelete, db: Session = Depends(get_db)):
     fname = utils.delete_file_by_cid(del_request.cid, db)
     return JSONResponse(content={"message": f"CID {del_request.cid}에 해당하는{fname} 파일이 삭제되었습니다.", "CID":del_request.cid, "fname":fname})
+
+@app.post("/api/restore/")
+async def restore_file(req: schemas.fileDelete, db: Session = Depends(get_db)):
+    db_file = utils.restore_file_by_cid(req.cid, db)
+    return JSONResponse(content={"CID": db_file.CID, "fname": db_file.fname, "message": "파일 복구 성공."})
 # db_file = models.File(
 #         CID=cid,
 #         fname=request_data.fname, 
@@ -105,6 +110,10 @@ async def delete_file(del_request: schemas.fileDelete, db: Session = Depends(get
 @app.post("/api/read_by_user_id/", response_model=list)
 async def read_file(read_request:schemas.ReadRequest, db: Session = Depends(get_db)):
     return utils.get_txhash_and_cid_by_user_id(read_request.user_id, db)
+
+@app.post("/api/restore/", response_model=list)
+async def restore_files(req: schemas.RestoreRequest, db: Session = Depends(get_db)):
+    return utils.restore_user_files(req.user_id, db)
 
 @app.post("/api/chat/")
 async def chat_generation_invoke(query_request:schemas.chatRequest):
