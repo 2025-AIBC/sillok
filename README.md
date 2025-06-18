@@ -245,7 +245,8 @@ docker compose up --build
 
 #### **4. WorldLand Setup:** Attach to Container & Manage Accounts
 
-    If you don’t yet have an account, either copy its JSON key file into /workspace/worldland-bcai_{NETWORK_ID}-{CHAIN_ID}/keystore inside the worldland-bcai container, or create a new account instead.
+- If you don’t yet have an account, either copy its JSON key file into /workspace/worldland-bcai_{NETWORK_ID}-{CHAIN_ID}/keystore inside the worldland-bcai container, or create a new account instead.
+
 ```bash
 # Open Other Terminal
 docker attach worldland-bcai
