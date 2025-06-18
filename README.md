@@ -34,7 +34,7 @@ Sillok is an innovative note-taking application that combines traditional docume
 ### Core Features
 
 -   ✅ **Document Management**: Create, read, update, delete markdown documents
--   ✅ **Blockchain Integration**: Store file metadata on Worldland for integrity verification
+-   ✅ **Blockchain Integration**: Store file metadata on an Ethereum-compatible private chain, WorldLand (chainId 250407), for integrity verification
 -   ✅ **IPFS Storage**: Decentralized storage of document content and embeddings
 -   ✅ **Vector Database**: PostgreSQL with pgvector for semantic search capabilities
 -   ✅ **AI Chat Interface**: LangChain-powered RAG system for intelligent document interaction
@@ -212,7 +212,7 @@ contract MetaDataStoreContract {
 
 Our development approach leveraged multiple AI assistants strategically, with Claude models serving as primary tools for their superior reasoning capabilities in extended thinking mode, while maintaining backup options through OpenAI and Google services to ensure uninterrupted development workflow during service limitations or outages.
 
-## Quick-start Guide (TBA:Worldland part)
+## Quick-start Guide
 
 ### Prerequisites
 
@@ -222,14 +222,14 @@ Our development approach leveraged multiple AI assistants strategically, with Cl
 
 ### Environment Setup
 
-1. **Clone the repository**
+#### **1. Clone the repository**
 
 ```bash
 git clone 2025-AIBC/sillok
 cd sillok
 ```
 
-2. **Create environment file**
+#### **2. Create environment file**
 
 ```bash
 cp .env.example .env
@@ -237,13 +237,52 @@ cp .env.example .env
 # OPENAI_API_KEY=your_api_key_here
 ```
 
-3. **Launch the application**
+#### **3. Launch the application**
 
 ```bash
 docker compose up --build
 ```
 
-4. **Access the application**
+#### **4. WorldLand Setup:** Attach to Container & Manage Accounts
+
+    If you don’t yet have an account, either copy its JSON key file into /workspace/worldland-bcai_{NETWORK_ID}-{CHAIN_ID}/keystore inside the worldland-bcai container, or create a new account instead.
+```bash
+# Open Other Terminal
+docker attach worldland-bcai
+eth.accounts; # Check Accounts
+admin.datadir # Check workspace of worldland-bcai
+
+# You should remember workspace path when you choose import exist account
+
+## if you want to create the new account
+personal.newAccount("your_password");
+
+## else if you want to import exist account
+# Open Another Terminal
+docker cp PVKEY/PVKEY.json worldland-bcai:/workspace/worldland-bcia_{num}-{num}/keystore
+
+# Finally, Check Accounts
+eth.accounts;
+```
+
+#### **5. WorldLand Mining:** Mine WLC to fund transactions
+```bash
+# Set the coinbase (replace the index if you imported/created a different account)
+miner.setEtherbase(eth.accounts[0])
+
+# Start a single mining thread
+miner.start(1)
+
+# Let it run for ~10 s, then stop
+miner.stop()
+
+# Check that the account was credited
+eth.getBalance(eth.accounts[0])
+```
+
+
+
+#### **6. Access the application**
 
 -   **Web Interface**: http://localhost (via NGINX)
 -   **Direct Gradio**: http://localhost:7860
@@ -257,11 +296,13 @@ docker compose up --build
 ### Usage Workflow
 
 1. **Login** using provided credentials
-2. **Create Documents** using the markdown editor
-3. **Save to Blockchain** - documents automatically stored on IPFS with metadata on Ethereum
-4. **Chat with AI** about your documents using the integrated chatbot
-5. **Verify Integrity** - check document authenticity via blockchain records
-6. **Manage Files** - view, edit, delete documents with full version history
+2. **Connect** WorldLand and Metamask
+3. **Check** Current Block and Connection Status
+4. **Create Documents** using the markdown editor
+5. **Save to Blockchain** - documents automatically stored on IPFS with metadata on Ethereum
+6. **Chat with AI** about your documents using the integrated chatbot
+7. **Verify Integrity** - check document authenticity via blockchain records
+8. **Manage Files** - view, edit, delete documents with full version history
 
 ### Service Architecture
 
@@ -271,8 +312,10 @@ Port 7860  → Gradio (Web Interface)
 Port 8000  → FastAPI (Backend API)
 Port 5432  → PostgreSQL (Database)
 Port 8545  → Ganache (Ethereum)
+Port 8546  → WorldLand (WorldLand RPC endpoint)
 Port 5001  → IPFS (API)
 Port 8080  → IPFS (Gateway)
+Port 8081  → WebUI (Connects WorldLand to Metamask)
 ```
 
 ### Development
