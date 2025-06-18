@@ -13,6 +13,10 @@ Sillok is an innovative note-taking application that combines traditional docume
 -   **Verifiable Integrity**: Cryptographic verification of document authenticity using blockchain records
 -   **Semantic Search**: Vector embeddings enable intelligent content discovery and retrieval
 
+## Demo Video
+
+![sillok demo](https://youtu.be/4QAgxsqWezs)
+
 ## Objectives
 
 -   **Data Integrity**: Ensure document authenticity and prevent tampering through blockchain verification
