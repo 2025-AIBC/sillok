@@ -15,7 +15,11 @@ Sillok is an innovative note-taking application that combines traditional docume
 
 ## Demo Video
 
+<div align="center">
+
 [![sillok demo](https://img.youtube.com/vi/4QAgxsqWezs/0.jpg)](https://youtu.be/4QAgxsqWezs)
+
+</div>
 
 ## Objectives
 
