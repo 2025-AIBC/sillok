@@ -27,3 +27,24 @@ npx truffle console --network development
 ```
 
 # Integrating WorldLand Private Network with MetaMask and a FastAPI+Gradio DApp
+
+### Open the other terminal
+```bash
+docker attach worldland-bcai
+```
+### Check the account
+If you don't have an account, you need to manually add the account's JSON file to workspace/worldland-bcai_{num}-{num}/keystore in the worldland-bcai container.
+```bash
+eth.accounts;
+```
+### Start Mining
+```bash
+miner.setEtherbase(eth.accounts[0]);
+```
+```bash
+miner.start(1);
+```
+### Check Balance
+```bash
+eth.getBalance(eth.accounts[0]);
+```
