@@ -18,6 +18,7 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.documents import Document
 import unicodedata
 
+import os
 #####################################################################################
 # Langchain setup: VectorStore, TextSplitter, Embeddings, LLM, ChatPrompt
 #####################################################################################
@@ -90,26 +91,59 @@ IPFS_PORT = 5001
 #####################################################################################
 # Blockchain setup
 #####################################################################################
-ganache_address = "http://ganache_url:8545"
-web3 = Web3(Web3.HTTPProvider(ganache_address))
+# 1) RPC URL 유연하게 읽기 (docker-compose 서비스 이름으로 연결)
+GANACHE_RPC    = os.getenv("GANACHE_URL", "http://ganache_url:8545")
+GANACHE_NETID  = os.getenv("GANACHE_NETWORK_ID", "1337")
+GANACHE_BUILD  = os.getenv("GANACHE_BUILD_PATH", "/app/ganache_build")
+FALLBACK_ABI   = os.getenv("ABI_PATH", "./contracts/MetaDataStoreContract.json")
+CONTRACT_ADDR  = os.getenv("CONTRACT_ADDRESS")  # 최종 폴백 주소
 
-## 빌드 아티팩트 파일 경로
-build_artifact_path = "/app/ganache_build/contracts/MetaDataStoreContract.json"
+# 2) Web3 인스턴스 생성
+web3 = Web3(Web3.HTTPProvider(GANACHE_RPC))
 
-## ABI 및 컨트랙트 주소 로드
-with open(build_artifact_path) as f:
-    contract_json = json.load(f)
-    contract_abi = contract_json["abi"]
-    network_id = '1337'  ## Ganache의 네트워크 ID
+# 3) build artifact 로드 시도
+artifact_path = f"{GANACHE_BUILD}/contracts/MetaDataStoreContract.json"
+try:
+    with open(artifact_path) as f:
+        artifact      = json.load(f)
+        contract_abi  = artifact["abi"]
+        nets          = artifact.get("networks", {})
+        if GANACHE_NETID in nets:
+            contract_address = nets[GANACHE_NETID]["address"]
+        else:
+            raise FileNotFoundError(f"네트워크 {GANACHE_NETID}에서 컨트랙트 미배포")
+except (FileNotFoundError, KeyError):
+    # 4) fallback: ABI는 별도 파일에서, 주소는 env var로
+    with open(FALLBACK_ABI) as f:
+        contract_abi = json.load(f)
+    if not CONTRACT_ADDR:
+        raise RuntimeError(
+            "CONTRACT_ADDRESS(env)나 ganache_build artifact 둘 중 하나에서 컨트랙트 주소를 찾을 수 없습니다."
+        )
+    contract_address = CONTRACT_ADDR
 
-    ## 컨트랙트 주소 가져오기
-    if network_id in contract_json['networks']:
-        contract_address = contract_json['networks'][network_id]['address']
-    else:
-        raise Exception(f"Contract not deployed on network {network_id}")
-
-## Smart contract instance
+# 5) 컨트랙트 인스턴스
 contract = web3.eth.contract(address=contract_address, abi=contract_abi)
+# ganache_address = "http://ganache_url:8545"
+# web3 = Web3(Web3.HTTPProvider(ganache_address))
+
+# ## 빌드 아티팩트 파일 경로
+# build_artifact_path = "/app/ganache_build/contracts/MetaDataStoreContract.json"
+
+# ## ABI 및 컨트랙트 주소 로드
+# with open(build_artifact_path) as f:
+#     contract_json = json.load(f)
+#     contract_abi = contract_json["abi"]
+#     network_id = '1337'  ## Ganache의 네트워크 ID
+
+#     ## 컨트랙트 주소 가져오기
+#     if network_id in contract_json['networks']:
+#         contract_address = contract_json['networks'][network_id]['address']
+#     else:
+#         raise Exception(f"Contract not deployed on network {network_id}")
+
+# ## Smart contract instance
+# contract = web3.eth.contract(address=contract_address, abi=contract_abi)
 
 #####################################################################################
 # 아래는 FastAPI에서 사용할 함수들을 정의한 부분입니다.

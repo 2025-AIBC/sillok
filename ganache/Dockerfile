@@ -20,8 +20,10 @@ RUN npm install -g --unsafe-perm truffle
 WORKDIR /ganache
 COPY . .
 
+# CRLF 제거: Windows 개행 문자를 제거하여 스크립트가 올바르게 실행되도록 함
+RUN sed -i 's/\r$//' /ganache/entrypoint.sh
+
 # entrypoint.sh 복사 및 실행 권한 부여
 RUN chmod +x /ganache/entrypoint.sh
 
-# 엔트리포인트 설정
 ENTRYPOINT ["/ganache/entrypoint.sh"]

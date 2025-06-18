@@ -12,8 +12,8 @@ done
 cd /ganache  # ganache 디렉토리로 이동
 truffle compile
 # truffle migrate --reset # 만약 컨트랜트를 재배포해야 하면 이 커맨드 실행
-truffle migrate --network development
-
+truffle migrate --network development --reset
+# truffle migrate --network worldland --reset
 
 # Ganache의 실행을 지속
 wait

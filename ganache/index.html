@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sillok Web3 Demo</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.8.2/dist/web3.min.js"></script>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 2em auto; }
+    label { display: block; margin-top: 1em; }
+    input, button { width: 100%; padding: .5em; margin-top: .5em; }
+    #status { margin-top: 1em; color: green; }
+    #error  { margin-top: 1em; color: red;   }
+  </style>
+</head>
+<body>
+  <h1>MetaMask <-> WorldLand 연동</h1>
+
+  <button id="connectBtn">🔗 MetaMask 연결</button>
+  <div id="account"></div>
+
+  <hr/>
+
+  <h2> 수동저장: 직접 CID를 구한 경우 </h2>
+  <label>CID (IPFS)</label>
+  <input type="text" id="cid" placeholder="예: Qm..." />
+
+  <label>파일 타입</label>
+  <input type="text" id="fileType" placeholder="예: md" />
+
+  <label>사용자 ID</label>
+  <input type="number" id="userId" placeholder="예: 123" />
+
+  <button id="sendBtn" disabled>💾 메타데이터 저장</button>
+
+  <div id="status"></div>
+  <div id="error"></div>
+
+<script>
+  let web3, contract;
+
+  const CONTRACT_ADDRESS = "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0"; // truffle migrate 후 실제 주소
+  const CONTRACT_ABI = [ /* 여기에 ABI JSON 배열을 붙여넣으세요 */ ];
+
+  async function init() {
+    if (!window.ethereum) {
+      document.getElementById('error').innerText = 'MetaMask가 설치되어 있지 않습니다.';
+      return;
+    }
+    web3 = new Web3(window.ethereum);
+
+    document.getElementById('connectBtn').onclick = async () => {
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        document.getElementById('account').innerText = '연결된 계정: ' + accounts[0];
+        contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
+        document.getElementById('sendBtn').disabled = false;
+      } catch (err) {
+        document.getElementById('error').innerText = '연결 실패: ' + err.message;
+      }
+    };
+
+    document.getElementById('sendBtn').onclick = async () => {
+      const cid      = document.getElementById('cid').value.trim();
+      const fileType = document.getElementById('fileType').value.trim();
+      const userId   = +document.getElementById('userId').value;
+      const timestamp = Math.floor(Date.now() / 1000); // 초 단위
+
+      if (!cid || !fileType || !userId) {
+        document.getElementById('error').innerText = '모든 필드를 채워주세요.';
+        return;
+      }
+      document.getElementById('status').innerText = '트랜잭션 대기 중…';
+      document.getElementById('error').innerText  = '';
+
+      try {
+        const accounts = await web3.eth.getAccounts();
+        const receipt = await contract.methods
+          .storeFileMetadata(cid, fileType, timestamp, false, String(userId))
+          .send({ from: accounts[0] })
+          .once('transactionHash', hash => {
+            document.getElementById('status').innerText = 'Tx 해시: ' + hash;
+          });
+        document.getElementById('status').innerText += '\n블록 번호: ' + receipt.blockNumber;
+      } catch (err) {
+        document.getElementById('error').innerText = '에러: ' + err.message;
+      }
+    };
+  }
+
+  window.addEventListener('load', init);
+</script>
+</body>
+</html>

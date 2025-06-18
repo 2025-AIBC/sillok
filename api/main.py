@@ -10,11 +10,15 @@
 # - (Additionally) IPFS에 저장할 때 암호화 먹여서 저장. 찾을 때 decryption 지원. (복호화 정보는 user_id에 따라 저장하면 됨.)
 
 import json
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine
 import models, schemas, utils
+
+import time, os
+from web3 import Web3, HTTPProvider
+from eth_account import Account
 
 models.Base.metadata.create_all(bind=engine)
 app = FastAPI()
@@ -47,6 +51,29 @@ def init_db_data():
     finally:
         db.close()
 
+
+# --- Web3 / 스마트 컨트랙트 설정 ---
+WORLDLAND_RPC = os.getenv("WORLDLAND_RPC", "http://127.0.0.1:8545") # 6?
+CHAIN_ID = int(os.getenv("WORLDLAND_CHAIN_ID", "250407"))
+PRIVATE_KEY = "8eb2f0a69ea741dc8e3e3385c5903b25562ef77b0302338642d17b45a7f46921"  # 서비스 계정 개인키
+
+w3 = Web3(HTTPProvider(WORLDLAND_RPC))
+service_account = Account.from_key(PRIVATE_KEY) if PRIVATE_KEY else None
+print()
+print()
+print("service_account0:", service_account)
+print()
+print()
+print()
+# ABI 로드 및 컨트랙트 인스턴스 생성
+# 3) ABI 로드
+abi_path = os.getenv("ABI_PATH", "/app/ganache_build/contracts/MetaDataStoreContract.json")
+with open(abi_path, "r") as f:
+    artifact     = json.load(f)
+    contract_abi = artifact["abi"]
+contract_address = os.getenv("CONTRACT_ADDRESS", "0x4f28be56BA833340c5A4BA9a5AeE95e2Ce8f3aa8")
+contract = w3.eth.contract(address=contract_address, abi=contract_abi)
+
 # Initialize the database with JSON data
 init_db_data()
 
@@ -57,6 +84,40 @@ init_db_data()
 def test():
     return "OK"
 
+@app.get("/api/eth_accounts")
+def eth_accounts():
+    return {"accounts": w3.eth.accounts}
+
+@app.get("/api/chain_status/")
+def chain_status():
+    """현재 체인 ID와 최신 블록 번호를 반환합니다."""
+    return {
+        "chainId": w3.eth.chain_id,
+        "latestBlock": w3.eth.block_number
+    }
+    
+@app.get("/api/tx_receipt/")
+def tx_receipt(txHash: str):
+    """주어진 트랜잭션 해시의 receipt를 반환합니다."""
+    receipt = w3.eth.get_transaction_receipt(txHash)
+    return {
+        "transactionHash": receipt.transactionHash.hex(),
+        "blockNumber": receipt.blockNumber,
+        "status": receipt.status
+    }
+    
+@app.get("/api/tx_receipt/")
+async def tx_receipt(txHash: str = Query(..., min_length=1)):
+    try:
+        receipt = w3.eth.get_transaction_receipt(txHash)
+        return {
+            "blockNumber": receipt.blockNumber,
+            "transactionHash": receipt.transactionHash.hex(),
+            "status": receipt.status
+        }
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"Transaction {txHash} not found")    
+    
 @app.post("/api/auth/")
 async def authenticate_user(auth_request: schemas.AuthRequest, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.account == auth_request.user_id).first()
@@ -66,47 +127,86 @@ async def authenticate_user(auth_request: schemas.AuthRequest, db: Session = Dep
         raise HTTPException(status_code=401, detail="잘못된 비밀번호입니다.")
     
     return JSONResponse(content={"user_id": db_user.user_id, "name": db_user.name, "account": db_user.account, "email": db_user.email, "message": "로그인 성공."})
-    # {
-    #     "user_id": db_user.user_id,
-    #     "name": db_user.name,
-    #     "account": db_user.account,
-    #     # "password": db_user.password,
-    #     # "created_date": db_user.created_date,
-    #     "email": db_user.email,
-    #     # "birthday": db_user.birthday,
-    #     # "gender": db_user.gender,
-    #     "message": "로그인 성공."
-    # }
 
 @app.post("/api/create/")
 async def create_file(file: schemas.FileCreate, db: Session = Depends(get_db)):
+    # 1) 오프체인 저장
     db_file = utils.create_file(file, db)
+
+    # 2) 온체인 메타데이터 기록 (서비스 계정 사용)
+    if service_account:
+        nonce = w3.eth.get_transaction_count(service_account.address)
+        tx = contract.functions.storeFileMetadata(
+            db_file.CID,
+            db_file.type,
+            int(db_file.last_update.timestamp()),
+            False,
+            db_file.user_id
+        ).build_transaction({
+            'from': service_account.address,
+            'nonce': nonce,
+            'gas': 300000,
+            'chainId': CHAIN_ID
+        })
+        print(f"ifif Transaction to be sent: {tx}")
+
+        # 트랜잭션 서명 및 전송
+        signed = service_account.sign_transaction(tx)
+        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+        print(f"Sent tx hash: {tx_hash.hex()}")
+        
+        db_file.TXHash = tx_hash.hex()
+        print(f"txhashTransaction to be sent: {tx_hash}")
+        db.commit()
+    else:
+        print("esleesleesleesleesleesleesleesleesle")
+        db_file.TXHash = ""
+            
     return JSONResponse(content={"UserID": db_file.user_id, "CID": db_file.CID,"TXHash": db_file.TXHash,"fname": db_file.fname,"last_update": db_file.last_update.strftime('%Y-%m-%d %H:%M:%S'),"message": "파일 생성 성공."})
 
 @app.post("/api/update/")
-async def create_file(file: schemas.FileUpdate, db: Session = Depends(get_db)):
+async def update_file(file: schemas.FileUpdate, db: Session = Depends(get_db)):
     db_file = utils.update_file(file, db)
+    # 온체인 메타데이터 기록 (서비스 계정 사용)
+    if service_account:
+        nonce = w3.eth.get_transaction_count(service_account.address)
+        tx = contract.functions.storeFileMetadata(
+            db_file.CID,
+            db_file.type,
+            int(db_file.last_update.timestamp()),
+            False,
+            db_file.user_id
+        ).buildTransaction({
+            'from': service_account.address,
+            'nonce': nonce,
+            'gas': 300000,
+            'chainId': CHAIN_ID
+        })
+        signed = service_account.sign_transaction(tx)
+        tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
+        db_file.TXHash = tx_hash.hex()
+        db.commit()
+    else:
+        db_file.TXHash = ""    
     return JSONResponse(content={"CID": db_file.CID,"TXHash": db_file.TXHash,"fname": db_file.fname,"last_update": db_file.last_update.strftime('%Y-%m-%d %H:%M:%S'),"message": "파일 생성 성공."})
 
+@app.delete("/api/delete_file/")
 @app.post("/api/delete_file/")
 async def delete_file(del_request: schemas.fileDelete, db: Session = Depends(get_db)):
     fname = utils.delete_file_by_cid(del_request.cid, db)
     return JSONResponse(content={"message": f"CID {del_request.cid}에 해당하는{fname} 파일이 삭제되었습니다.", "CID":del_request.cid, "fname":fname})
 
+# async def delete_file(del_request: schemas.fileDelete, db: Session = Depends(get_db)):
+#     fname = utils.delete_file_by_cid(del_request.cid, db)
+#     return {"message": f"CID {del_request.cid}에 해당하는 {fname} 파일이 삭제되었습니다.",
+#             "CID": del_request.cid, "fname": fname}
+    
+    
 @app.post("/api/restore/")
 async def restore_file(req: schemas.fileDelete, db: Session = Depends(get_db)):
     db_file = utils.restore_file_by_cid(req.cid, db)
     return JSONResponse(content={"CID": db_file.CID, "fname": db_file.fname, "message": "파일 복구 성공."})
-# db_file = models.File(
-#         CID=cid,
-#         fname=request_data.fname, 
-#         type=request_data.type,
-#         last_update=metadata["last_update"],
-#         is_deleted=metadata["is_deleted"],
-#         user_id=request_data.user_id,
-#         TXHash=tx_hash,
-#         content=request_data.content # 빠른 사용을 위해 CID와 병행
-#     )
+
 @app.post("/api/read_by_user_id/", response_model=list)
 async def read_file(read_request:schemas.ReadRequest, db: Session = Depends(get_db)):
     return utils.get_txhash_and_cid_by_user_id(read_request.user_id, db)

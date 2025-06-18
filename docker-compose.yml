@@ -1,4 +1,34 @@
 services:
+    worldland:
+        image: infonetlab/worldland_bcai
+        container_name: worldland-bcai
+        ports:
+        - "8546:8545"
+        - "30303:30303"
+        stdin_open: true
+        tty: true
+        command:
+        - --http
+        - --http.addr
+        - 0.0.0.0
+        - --http.port
+        - "8545"
+        - --http.api
+        - eth,net,web3,personal
+        - console
+
+    webui:
+        image: node:18-alpine       # 가볍고 npx가 포함된 Node.js 이미지
+        container_name: webui
+        working_dir: /usr/src/app
+        volumes:
+        - ./ganache:/usr/src/app  # 로컬 ganache 폴더를 컨테이너에 마운트
+        command: ["npx", "http-server", ".", "-p", "8081", "--cors"]
+        ports:
+        - "8081:8081"
+        depends_on:
+        - ganache                 # 원하시면 ganache가 올라온 뒤에 시작되게
+
     nginx:
         build:
             context: ./nginx
@@ -29,9 +59,16 @@ services:
             - "ganache:ganache_url"
         ports:
             - "8000:8000"
+        environment:
+            WORLDLAND_RPC:    "http://worldland:8545"
+            WORLDLAND_CHAIN_ID: "250407"
+            CONTRACT_ADDRESS:   "0x4f28be56BA833340c5A4BA9a5AeE95e2Ce8f3aa8"
+            ABI_PATH:           "/app/ganache_build/contracts/MetaDataStoreContract.json"         
         depends_on:
             postgres:
                 condition: service_healthy
+            worldland:
+                condition: service_started
         volumes:
             - ./data/ganache_build:/app/ganache_build
         env_file:

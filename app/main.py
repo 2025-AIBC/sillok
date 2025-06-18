@@ -9,7 +9,19 @@ import gradio as gr
 import requests
 from bs4 import BeautifulSoup
 
-FASTAPI_SERVER = "http://fastapi_url:8000/api"
+import threading
+import os
+
+DEFAULT_STATUS_DATA = {
+    "status": "New file",
+    "title": "N/A",
+    "last_update": "N/A",
+    "cid": "N/A",
+    "txhash": "N/A"
+}
+
+# FASTAPI_SERVER = "http://fastapi_url:8000/api"
+FASTAPI_SERVER = os.getenv("FASTAPI_SERVER", "http://fastapi_url:8000/api")
 USER_ID = None
 USER_FILES = None
 FILE_STATUS_HTML = """
@@ -63,22 +75,41 @@ def custom_chat(user_query, _):
         yield answer
 
 def read_cid(cid):
-    # FastAPI 거치면 느려지니까.. 발표자료에는 FastAPI 건너는거로 그리긴했는데 실제로는 이렇게 direct하게 구현했음.
-    IPFS_HOST = "ipfs" # Check `docker-compose.yml`
-    IPFS_PORT = 5001
-    response = requests.get(
-        f"http://{IPFS_HOST}:{IPFS_PORT}/api/v0/cat?arg={cid}"
-    )
-    if not response.ok:
-        raise requests.HTTPError(
-            f"Failed to fetch {cid}: {response.status_code} {response.text}"
-        )
-    content = response.json()
-    print(content)
-    # content에 저장된 내용
-    # - meatadata:{fname, user_id, last_update, is_deleted, raw_content_type, embeddings, text_splitter}
-    # - raw_content: 텍스트 내용
-    return content
+    # IPFS API 대신 HTTP 게이트웨이 사용
+    # 컨테이너가 8080 포트를 노출했다면:
+    IPFS_GATEWAY = "http://ipfs:8080/ipfs"
+    resp = requests.get(f"{IPFS_GATEWAY}/{cid}")
+    if resp.status_code != 200:
+        raise requests.HTTPError(f"Failed to fetch {cid}: {resp.status_code} {resp.text}")
+    # text = resp.text
+    text = resp.json().get("raw_content", "")
+
+    # JSON 형태로 메타/원본을 묶어 반환하는 구조였다면 그대로,
+    # 아니면 단순히 plain text라면
+    return {
+        "raw_content": text,
+        "metadata": {
+            "last_update": "—",   # 만약 IPFS에 metadata가 별도로 있다면 parsing
+            "is_deleted": False
+        }
+    }    
+    
+    # # FastAPI 거치면 느려지니까.. 발표자료에는 FastAPI 건너는거로 그리긴했는데 실제로는 이렇게 direct하게 구현했음.
+    # IPFS_HOST = "ipfs" # Check `docker-compose.yml`
+    # IPFS_PORT = 5001
+    # response = requests.get(
+    #     f"http://{IPFS_HOST}:{IPFS_PORT}/api/v0/cat?arg={cid}"
+    # )
+    # if not response.ok:
+    #     raise requests.HTTPError(
+    #         f"Failed to fetch {cid}: {response.status_code} {response.text}"
+    #     )
+    # content = response.json()
+    # print(content)
+    # # content에 저장된 내용
+    # # - meatadata:{fname, user_id, last_update, is_deleted, raw_content_type, embeddings, text_splitter}
+    # # - raw_content: 텍스트 내용
+    # return content
 
 def parse_html_to_dict(html):
     soup = BeautifulSoup(html, 'html.parser')
@@ -116,29 +147,42 @@ def save_markdown(user_text, file_status_html):
         return [user_text, gr.HTML(FILE_STATUS_HTML.format(**file_status_data))]
 
     fname = extract_title(user_text)
-    is_update = False
-    # File Update
+
+    url = FASTAPI_SERVER + "/create/"
+    payload = {
+        "user_id": USER_ID,
+        "fname": fname,
+        "type": "markdown",
+        "content": user_text
+    }
     if file_status_data["cid"] != "N/A":
-        file_update_data = {"user_id": USER_ID, "fname":fname, "type": "markdown", "content": user_text, "CID": file_status_data["cid"]}
-        response = requests.post(f"{FASTAPI_SERVER}/update/", json=file_update_data)
-        is_update = True
-    else:    
-        file_create_data = {"user_id": USER_ID, "fname":fname, "type": "markdown", "content": user_text}
-        response = requests.post(f"{FASTAPI_SERVER}/create/", json=file_create_data)
-    
+        payload["CID"] = file_status_data["cid"]
+        url = FASTAPI_SERVER + "/update/"
+
+    response = requests.post(url, json=payload)
     if response.status_code == 200:
-        response_data = response.json()
-        print("응답 데이터:", response_data)
+        data = response.json()
+        tx = data["TXHash"]
+        cid = data["CID"]
+        fname = data["fname"]
+        last_update = data["last_update"]
+
+        # 화면에 보여줄 상태 업데이트
+        file_status_data = {
+            "status": "Saved file",
+            "title": fname,
+            "last_update": last_update,
+            "cid": cid,
+            "txhash": tx
+        }
+
+        gr.Info(f"✅ 저장 완료! TxHash: {response.json().get('TXHash', 'N/A')}")
         user_text = ""
-        file_status_data = deepcopy(DEFAULT_STATUS_DATA)
-        if is_update:
-            gr.Info("✍🏻 파일을 성공적으로 업데이트했습니다.")
-        else:
-            gr.Info("✅ 파일을 성공적으로 저장했습니다.")
     else:
-        print(f"요청 실패: {response.status_code}, 메시지: {response.text}")
-        gr.Info(f"❌ 파일을 저장하지 못했습니다.\n\n에러메세지:\n{response.text}")
+        gr.Info(f"❌ 저장 실패: {response.text}")
+
     return [user_text, gr.HTML(FILE_STATUS_HTML.format(**file_status_data))]
+    
 
 def delete_file_by_cid(cid):
     cid_data = {"cid": cid}
@@ -190,14 +234,48 @@ def delete_selected_file(selected_file):
             else:
                 gr.Info("ERROR: 파일명이 잘못되었습니다.")
     return [gr.Dropdown([""], label="📝 선택", value="", interactive=True), gr.HTML(FILE_STATUS_HTML.format(**file_status_data))]
+
+# 체인 상태를 가져오는 함수
+def fetch_chain_status():
+    try:
+        r = requests.get(f"{FASTAPI_SERVER}/chain_status/")
+        r.raise_for_status()
+        data = r.json()
+        return f"🌐 체인 ID: {data['chainId']} · ⛓ 최신 블록: {data['latestBlock']}"
+    except:
+        return "⚠️ 체인 상태를 가져올 수 없습니다"
 #####################################################################################
 # User Interface
 #####################################################################################
 with gr.Blocks() as demo:
+    chain_status = gr.HTML(fetch_chain_status(), label="체인 상태")
+    refresh_btn = gr.Button("🔄 상태 갱신")
+    refresh_btn.click(lambda: fetch_chain_status(), outputs=chain_status)
+    
+    
     user_text = gr.State(value="")
     user_file_list = [""]
     gr.Markdown("# 📝 Sillok")
 
+    # gr.HTML(MM_STATUS_HTML) # 페이지 로드 직후 MetaMask 상태 표시
+    gr.Markdown("[🌐 Connect 🌎 WorldLand and 🦊Metamask ](http://127.0.0.1:8081/)")
+    
+    # Web UI 링크 버튼 추가
+    with gr.Row():
+        # 연결 확인 버튼 & 결과 표시용 텍스트박스
+        check_btn = gr.Button("🔌 연결 상태 확인")
+        conn_status = gr.Textbox(label="연결 상태", interactive=False)    
+
+        def check_connection():
+            r = requests.get(f"{FASTAPI_SERVER}/eth_accounts")
+            addrs = r.json().get("accounts", [])
+            if addrs:
+                return f"✅ 연결됨: {addrs[0]}"
+            else:
+                return "❌ 연결되지 않음"
+
+        check_btn.click(fn=check_connection, inputs=None, outputs=conn_status)
+            
     with gr.Row():
         with gr.Column(scale=3):
             with gr.Tab("Text", id="text") as text_tab:
@@ -220,7 +298,7 @@ with gr.Blocks() as demo:
                 markdown_output = gr.Markdown(
                     latex_delimiters=[{"left":"$$", "right":"$$"}],
                 )
-            
+                # gr.Textbox.update(source=user_text, outputs=markdown_output) #추가 작동안되면 제거
             # [TODO]: Live Editor 탭 추가
             
             markdown_tab.select(
