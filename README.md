@@ -1,6 +1,6 @@
-# Sillok
-
 > This project was completed as the Final Project for 'Generative AI and Blockchain 2025' at GIST, supervised by Professor Heung-No Lee.
+
+# Sillok
 
 A confidence-driven note-taking application that leverages **Generative AI**, **Blockchain**, and **IPFS** for secure, verifiable, and intelligent document management.
 
@@ -8,14 +8,14 @@ A confidence-driven note-taking application that leverages **Generative AI**, **
 
 Sillok is an innovative note-taking application that combines traditional document management with cutting-edge technologies to provide:
 
--   **Secure Storage**: Documents stored on IPFS with metadata integrity guaranteed by Ethereum blockchain
+-   **Secure Storage**: Documents stored on IPFS with metadata integrity guaranteed by Ethereum blockchain ([Worldland](https://worldland.foundation))
 -   **AI-Powered Assistance**: RAG (Retrieval Augmented Generation) chatbot that can answer questions about your notes
 -   **Verifiable Integrity**: Cryptographic verification of document authenticity using blockchain records
 -   **Semantic Search**: Vector embeddings enable intelligent content discovery and retrieval
 
 ## Demo Video
 
-![sillok demo](https://youtu.be/4QAgxsqWezs)
+[![sillok demo](https://img.youtube.com/vi/4QAgxsqWezs/0.jpg)](https://youtu.be/4QAgxsqWezs)
 
 ## Objectives
 
@@ -30,7 +30,7 @@ Sillok is an innovative note-taking application that combines traditional docume
 ### Core Features
 
 -   ✅ **Document Management**: Create, read, update, delete markdown documents
--   ✅ **Blockchain Integration**: Store file metadata on Ethereum for integrity verification
+-   ✅ **Blockchain Integration**: Store file metadata on Worldland for integrity verification
 -   ✅ **IPFS Storage**: Decentralized storage of document content and embeddings
 -   ✅ **Vector Database**: PostgreSQL with pgvector for semantic search capabilities
 -   ✅ **AI Chat Interface**: LangChain-powered RAG system for intelligent document interaction
@@ -208,7 +208,7 @@ contract MetaDataStoreContract {
 
 Our development approach leveraged multiple AI assistants strategically, with Claude models serving as primary tools for their superior reasoning capabilities in extended thinking mode, while maintaining backup options through OpenAI and Google services to ensure uninterrupted development workflow during service limitations or outages.
 
-## Quick-start Guide
+## Quick-start Guide (TBA:Worldland part)
 
 ### Prerequisites
 
